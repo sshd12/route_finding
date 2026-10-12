@@ -1,0 +1,112 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[margin=0.9in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,microtype,xcolor,hyperref}
+\definecolor{navy}{HTML}{193858}
+\hypersetup{colorlinks=true,urlcolor=navy}
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+\title{\textcolor{navy}{Efficient Walking Route algorithim}\\[5pt]\large}
+\author{}
+\date{}
+\begin{document}
+\maketitle
+\begin{abstract}
+Walking routes are usually chosen based on distance or travel time, but in cities with a lot of hills like San Francisco, elevation changes are also an important factor in route choice (Milias et al., 2026; Meeder et al., 2017; Greenberg et al., 2019). This study investigates which of three elevation metrics, total ascent, average grade, and maximum grade, best captures how hilly different walking routes are. Random starting and ending points will be selected across San Francisco, and multiple walking routes will be created using OpenStreetMap data and the Valhalla routing engine. Elevation data will be used to calculate the three measurements for each route. The results will be compared to see how well each measurement distinguishes between routes with different hill characteristics, including long gradual hills and short steep hills. The goal is to find which measurement, or combination of measurements, is most useful for planning walking routes in hilly areas.
+\end{abstract}
+\section{Introduction}
+Walking is one of the simplest ways to travel in a city, but not every walking route of similar distance requires the same amount of effort and time (Tong and Bode, 2022; Muraleetharan and Hagiwara, 2007). This is especially noticeable in cities where steep streets such as San Francisco which can make two routes of similar distance feel very different. A slightly shorter route may require much more climbing, while a slightly longer route may be much easier to walk (Virtanen, 2013; Al-Widyan et al., 2017). Because of this, distance and travel time alone may not always be enough to describe a good walking route in hilly cities (Siriaraya et al., 2020; Milias et al., 2026).
+
+Most navigation systems are designed to find routes that minimize distance or travel time (Siriaraya et al., 2020; Al-Widyan et al., 2017). These methods work well when the main goal is reaching a destination quickly, but they do not consider how hard the hills along a route make the walk. Elevation can be included in route planning, but there is another problem. There isn't a conventional way to measure how hilly a walking route is (Pingel, 2010; Maghelal and Capp, 2011).
+
+In this paper three measurements will be used to describe how hilly a route is. Total ascent shows the total amount of uphill climbing. Average grade describes the general steepness of the whole route. And maximum grade shows the steepest section. Each measurement describes a different part of the route. A route could have a large total ascent but only gentle slopes, while another could have little total climbing but contain one very steep street (Jessup et al., 2023; Alexander, 2002). This makes it difficult to choose a single measurement that clearly describes hill difficulty across different types of routes.
+
+Previous research has shown that slope has a strong effect on walking route selection (Pingel, 2010), that people tend to overestimate how steep slopes are (Pingel, 2010), and that the energy cost of walking does not increase in a straight line with steeper grades (Jessup et al., 2023; Looney et al., 2019). A 1\% increase in slope has been estimated to make walking roughly 10\% less attractive (Meeder et al., 2017), and models that ignore slope overestimate how far people can walk by 6 to 8\% on average (Milias et al., 2026). These findings show the need for a better approach to measuring route hilliness in pedestrian navigation.
+
+This research is based on the idea that different hill measurements may separate walking routes in different ways, because slope affects walking through different physical and perceptual pathways (Tong and Bode, 2022; Pingel, 2010). Instead of assuming that one measurement is automatically the best, this study will compare total ascent, average grade, and maximum grade across a systematic sample of route pairs in San Francisco.
+
+By identifying the strengths and weaknesses of each measurement, this research may help improve how hills are represented in pedestrian route planning. The results could also provide a better basis for designing walking route systems that consider more than just the shortest or fastest path, including hill difficulty as a key factor in route recommendations (Siriaraya et al., 2020; Payne and Dror, 2017; Higgins, 2021).
+
+\section{Route Geometry}
+
+\subsection{Defining and Dividing a Route}
+\begin{equation}
+\boxed{R=(s_1,s_2,\ldots,s_n)}
+\end{equation}
+
+Each route is divided into short segments with a recorded distance and elevation at both endpoints. This allows flat, steep, uphill, and downhill parts of a route to be measured separately using the same segment rule for every route.
+
+\subsection{Elevation Change}
+\begin{equation}
+\boxed{\Delta h_i=h_i-h_{i-1}}
+\end{equation}
+
+The elevation change of each segment is calculated by subtracting its starting elevation from its ending elevation. Positive values represent uphill segments and negative values represent downhill segments.
+
+\subsection{Segment Grade}
+\begin{equation}
+\boxed{g_i=\frac{\Delta h_i}{d_i}}
+\qquad
+\boxed{p_i=100g_i}
+\end{equation}
+
+Segment grade measures steepness by dividing elevation change by distance. Decimal grade is used in the energy model, while percent grade is used to describe the slope.
+
+\subsection{Total Route Distance}
+\begin{equation}
+\boxed{D=\sum_{i=1}^{n}d_i}
+\end{equation}
+
+Total route distance is the sum of all segment lengths. It is used to calculate route-level measurements such as average grade and average energy per meter.
+\section{Three Hilliness Metrics}
+\subsection{Metric 1: Total ascent}
+\begin{equation}\boxed{A=\sum_{i=1}^{n}\max(\Delta h_i,0)}\end{equation}
+Add the height gained on uphill segments. Do not subtract downhill sections. The answer is in meters. This tells us how many meters we climb. However, it cannot tell whether the climb is long and gentle or short and steep. It also ignores downhill slopes, and longer routes may have more climbing.
+
+\subsection{Metric 2: Distance-weighted mean absolute grade}
+\begin{equation}\boxed{G_{\mathrm{avg}}=\frac{\displaystyle\sum_{i=1}^{n}|g_i|d_i}{D}=\frac{\displaystyle\sum_{i=1}^{n}|\Delta h_i|}{D}}\end{equation}
+\begin{equation}G_{\mathrm{avg}}(\%)=100G_{\mathrm{avg}}\end{equation}
+Find the steepness of each segment without its plus or minus sign. Give longer segments more weight, add the results, and divide by total distance. The second formula gives the same answer using height changes. Uphill and downhill both count as steepness instead of canceling each other out. A long slope counts more than a short slope. However, the average can hide one very steep section. This measure treats uphill and downhill steepness equally, but the energy model does not.
+
+\subsection{Metric 3: Steepest segment, uphill or downhill}
+\begin{equation}\boxed{G_{\max}=\max_{1\leq i\leq n}|g_i|}\end{equation}
+\begin{equation}G_{\max}(\%)=100G_{\max}\end{equation}
+Find the single steepest segment, whether uphill or downhill. This catches short, steep hills that the other measures may miss. But it does not show how long that hill is. Small errors in height data can also change the result, so we must measure all routes in the same way.
+
+\section{Modeled Walking Energy}
+\subsection{Published grade-dependent walking-cost model}
+\begin{equation}\boxed{\begin{aligned}C(g_i)={}&280.5g_i^5-58.7g_i^4-76.8g_i^3\\&+51.9g_i^2+19.6g_i+2.5\end{aligned}}\end{equation}
+This published equation estimates walking energy for each meter at a given slope. It gives energy per kilogram of body mass, in J/kg/m. Our three measures describe hills, not energy. This published equation gives us one consistent energy estimate to compare them with. It treats uphill and downhill differently. However, both the measures and the energy estimate use the same slope data, so this is not a separate real-world test. The original study tested slopes of about $-45\%$ to $+45\%$. We will flag slopes outside that range. Real walking energy may also change with walking speed, ground conditions, and the person.
+
+\subsection{Segment energy}
+\begin{equation}\boxed{E_i=C(g_i)\,d_i}\end{equation}
+Multiply the estimated energy per meter by the segment length. This gives the estimated energy for that segment, per kilogram. Walking 100 m on a hill should count more than walking 10 m on the same hill. Multiplying by distance accounts for this.
+
+\subsection{Total route energy}
+\begin{equation}\boxed{E_{\mathrm{total}}=\sum_{i=1}^{n}E_i=\sum_{i=1}^{n}C(g_i)\,d_i}\end{equation}
+Add the estimated energy from every segment to get the energy for the whole route, per kilogram. This tells us the estimated energy needed to finish a route. But a longer route usually needs more energy, even if it is flat. So total energy alone cannot tell us how hilly a route is.
+
+\subsection{Distance-normalized modeled route cost}
+\begin{equation}\boxed{C_R=\frac{E_{\mathrm{total}}}{D}=\frac{\displaystyle\sum_{i=1}^{n}C(g_i)\,d_i}{\displaystyle\sum_{i=1}^{n}d_i}}\end{equation}
+Divide total estimated energy by total distance. This tells us the average estimated energy needed for each meter. Dividing by distance makes routes of different lengths easier to compare. We use this as our main energy reference. Even flat walking needs energy: $C(0)=2.5$ J/kg/m. This number comes from a model, not from people rating how hilly the routes feel.
+
+\section{Statistical Comparison}
+\subsection{Comparing the three metrics with modeled cost}
+For each of $N$ routes, calculate $A$, $G_{\mathrm{avg}}$, $G_{\max}$, and $C_R$. Then compute:
+\begin{equation}\boxed{\begin{aligned}\rho_A&=\rho_s(A,C_R),\\[3pt]\rho_{\mathrm{avg}}&=\rho_s(G_{\mathrm{avg}},C_R),\\[3pt]\rho_{\max}&=\rho_s(G_{\max},C_R).\end{aligned}}\end{equation}
+For each measure, rank the routes from low to high. Do the same using modeled energy per meter. Spearman correlation checks how similar the two rankings are. Values near $+1$ mean similar rankings; near $-1$ mean opposite rankings; near $0$ mean little ranking agreement. The three measures use different units. Comparing rankings lets us compare them in the same way. We will report all three results. A high correlation does not prove that a measure captures every meaning of hilliness.
+
+\subsection{Spearman formula without tied ranks}
+\begin{equation}\boxed{\rho_s=1-\frac{6\displaystyle\sum_{j=1}^{N}q_j^2}{N(N^2-1)}}\end{equation}
+Give every route a rank using one hill measure and another rank using modeled energy per meter. Find the difference between the two ranks for each route, then use the formula. Large rank differences show that the two methods order routes differently. This simple formula works only if there are no ties. If routes have the same value, use the standard Spearman method with average ranks.
+
+\section{Integration into A*/Dijkstra Routing}
+Rather than ranking three routes after they are generated, we will incorporate the selected hilliness measure into the edge costs used by A* or Dijkstra's algorithm. The resulting cost function will balance distance and hill difficulty during route search. Its exact form will be determined after the correlation analysis; measures such as maximum grade may require additional handling because they are not additive across segments.
+
+\section{Interpretation and Limitations}
+We will compare the three correlation results to determine which hill measure most closely matches the energy model. We will then integrate this measure into the A*/Dijkstra cost formula to find an optimal route based on distance and hill difficulty. However, the results may change with different routes, elevation data, or segment lengths.
+
+\section*{Reference}
+Minetti, A. E., Moia, C., Roi, G. S., Susta, D., \& Ferretti, G. (2002). Energy cost of walking and running at extreme uphill and downhill slopes. \emph{Journal of Applied Physiology}. \url{https://doi.org/10.1152/japplphysiol.01177.2001}
+\end{document}

@@ -1,69 +1,66 @@
-import Image from "next/image";
-
+'use client';
+import { useMemo, useState } from 'react';
+import RouteMap from '@/components/route-map';
+import type { Coordinate } from '@/components/street-map';
+import { candidates, locations, metrics, score, spearman, samplePositions } from '@/lib/routing';
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+  const [start,setStart] = useState<string>(locations[0]);
+  const [end,setEnd] = useState<string>(locations[1]);
+  const [custom,setCustom] = useState(false);
+  const [customStart,setCustomStart] = useState<Coordinate | null>(null);
+  const [customEnd,setCustomEnd] = useState<Coordinate | null>(null);
+  const [pickTarget,setPickTarget] = useState<'start' | 'end'>('start');
+  const [coordinateInput,setCoordinateInput] = useState('');
+  const [coordinateError,setCoordinateError] = useState('');
+  const pick = (point: Coordinate) => {
+    setCustom(true);
+    if (pickTarget === 'start') { setCustomStart(point); setPickTarget('end'); }
+    else setCustomEnd(point);
+    setCoordinateInput(''); setCoordinateError('');
+  };
+  const enterCoordinate = () => {
+    const parts = coordinateInput.split(',').map(s => s.trim());
+    const [lat,lng] = parts.map(Number);
+    if (parts.length !== 2 || parts.some(p => !p) || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      setCoordinateError('Enter latitude, longitude (for example: 37.7955, -122.3937).'); return;
+    }
+    pick({lat,lng});
+  };
+  const [uphill,setUphill] = useState(12);
+  const [downhill,setDownhill] = useState(3);
+  const [selected,setSelected] = useState<string | null>(null);
+  const [ranking,setRanking] = useState('energy');
+  const [view,setView] = useState('explore');
+  const routes = useMemo(() => candidates(start === locations[1]),[start]);
+  const rankValue = (route: (typeof routes)[number]) => {
+    const m = metrics(route);
+    return ranking === 'distance' ? route.distance : ranking === 'ascent' ? m.gain
+      : ranking === 'average' ? m.averageGrade : ranking === 'maximum' ? m.maxGrade
+      : ranking === 'energy' ? m.normalizedCost : score(route,uphill,downhill);
+  };
+  const ranked = [...routes].sort((a,b) => rankValue(a)-rankValue(b));
+  const measurements = routes.map(metrics);
+  const referenceCosts = measurements.map(m => m.normalizedCost);
+  const correlations = [
+    ['Total ascent', spearman(measurements.map(m => m.gain), referenceCosts)],
+    ['Mean absolute grade', spearman(measurements.map(m => m.averageGrade), referenceCosts)],
+    ['Maximum absolute grade', spearman(measurements.map(m => m.maxGrade), referenceCosts)],
+  ] as const;
+  const recommended = ranked[0];
+  const active = routes.find(r => r.id === selected) ?? recommended;
+  const stats = metrics(active);
+  const baseline = routes.reduce((a,b) => a.distance < b.distance ? a : b);
+  const same = !custom && start === end;
+  const sampleStart = routes[0].points[0];
+  const sampleEnd = routes[0].points.at(-1)!;
+  return <main>
+    <header><a className="brand" href="/"> <span className="brand-icon">↗</span> comfortwalk<span className="lab">RESEARCH LAB</span></a><nav aria-label="Main"><button className={view==='explore'?'nav-active':''} onClick={()=>setView('explore')}>Route explorer</button><button className={view==='method'?'nav-active':''} onClick={()=>setView('method')}>The method</button></nav><span className="version">Experimental / v0.1</span></header>
+    <section className="intro"><div><div className="eyebrow">A DIFFERENT WAY TO GET THERE</div><h1>A little farther.<br/><span>A lot less uphill.</span></h1><p>Explore how terrain changes the path we choose.<br/>Compare the shortest walk with a gentler alternative.</p></div><div className="intro-note"><span className="status-dot"/> Research prototype<p>San Francisco, California<br/>Synthetic demonstration data</p></div></section>
+    {view==='method' ? <section className="method"><div className="eyebrow">RESEARCH REFERENCE / IMPLEMENTED DEMONSTRATION</div><h2>Which metric best describes a hilly walk?</h2><p>The supplied research proposal compares three hilliness measures across San Francisco routes. This prototype implements its equations on synthetic candidates; it does not report the proposed study’s findings.</p><h3>Route geometry</h3><code>Δhᵢ = hᵢ − hᵢ₋₁ · gᵢ = Δhᵢ / dᵢ · D = Σ dᵢ</code><p>Each segment has an explicit distance in meters and elevations at both endpoints. Decimal signed grade enters the energy model. Percent grade is displayed to describe steepness. The sample distances and elevations are invented; they are not derived from the map.</p><h3>Three hilliness metrics</h3><code>A = Σ max(Δhᵢ, 0)<br/>Gavg = 100 × Σ |Δhᵢ| / D<br/>Gmax = 100 × max |gᵢ|</code><p>Total ascent measures uphill climbing in meters. Distance-weighted mean absolute grade counts uphill and downhill without cancellation. Maximum absolute grade captures the steepest segment in either direction, but depends on sampling resolution and elevation noise.</p><h3>Modeled walking energy</h3><code>C(g) = 280.5g⁵ − 58.7g⁴ − 76.8g³ + 51.9g² + 19.6g + 2.5<br/>Etotal = Σ C(gᵢ)dᵢ · CR = Etotal / D</code><p>The reference attributes this polynomial to <a href="https://doi.org/10.1152/japplphysiol.01177.2001" target="_blank" rel="noreferrer">Minetti et al. (2002)</a>. C is in J/kg/m; total energy is in J/kg. The main energy reference, CR, is distance-normalized. Uphill and downhill have different modeled costs, and flat walking costs 2.5 J/kg/m. Segments outside approximately −45% to +45% are flagged as outside the stated model range; their outputs are extrapolations.</p><h3>Statistical comparison</h3><p>Spearman correlation compares the rankings of each hill metric with CR. This implementation uses average ranks for ties and shows “Undefined” for constant values. The three synthetic candidates illustrate the calculation only. They are far too small and artificial a sample to identify a preferred metric. Shared slope inputs also make this a model comparison, not independent real-world validation.</p><h3>Routing study and next steps</h3><p>The proposal calls for randomly sampled origins and destinations in San Francisco, candidate walking routes from OpenStreetMap and Valhalla, and consistently sampled elevation data. These integrations are pending. After the analysis, a distance–hill cost can be incorporated into A* or Dijkstra. Its form remains undecided; maximum grade is non-additive and needs additional handling.</p><h3>Separate cost experiment</h3><code>cost = distance + α × ascent + β × descent</code><p>The optional penalty controls retain the earlier prototype’s exploratory score. This score is not the final formula from the reference, and its default weights are not research findings.</p><button className="primary" onClick={()=>setView('explore')}>Explore the metrics →</button></section> : <>
+    <section className="workspace"><aside className="planner"><div className="section-title"><h2>Plan a walk</h2><span>01 / EXPLORE</span></div><div className="endpoint-mode"><button onClick={()=>{setCustom(false);setCustomStart(null);setCustomEnd(null)}} aria-pressed={!custom}>Sample walk</button><button onClick={()=>{setCustom(true);setPickTarget('start')}} aria-pressed={custom}>Pick on map</button></div>{custom ? <><button className={`endpoint-select ${pickTarget==='start'?'active':''}`} onClick={()=>setPickTarget('start')}><strong>A · Starting point</strong><span>{customStart ? `${customStart.lat.toFixed(5)}, ${customStart.lng.toFixed(5)}` : 'Click the map to place A'}</span></button><button className="swap" aria-label="Swap custom endpoints" onClick={()=>{setCustomStart(customEnd);setCustomEnd(customStart)}}>⇅</button><button className={`endpoint-select ${pickTarget==='end'?'active':''}`} onClick={()=>setPickTarget('end')}><strong>B · Destination</strong><span>{customEnd ? `${customEnd.lat.toFixed(5)}, ${customEnd.lng.toFixed(5)}` : 'Click the map to place B'}</span></button><p className="field-note" role="status">Click the map to set your {pickTarget === 'start' ? 'starting point' : 'destination'}. Select A or B above to move that pin.</p><label htmlFor="coordinates">Or enter latitude, longitude</label><input id="coordinates" className="coordinate-input" value={coordinateInput} placeholder="37.7955, -122.3937" onChange={e=>setCoordinateInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter') enterCoordinate()}}/><button className="coordinate-button" onClick={enterCoordinate}>Set {pickTarget === 'start' ? 'starting point' : 'destination'}</button>{coordinateError && <p className="error" role="alert">{coordinateError}</p>}<button className="reset-endpoints" onClick={()=>{setCustomStart(null);setCustomEnd(null);setPickTarget('start')}}>Clear pins</button></> : <><label htmlFor="start">Starting point</label><select id="start" value={start} onChange={e=>{setStart(e.target.value);setSelected(null)}}>{locations.map(l=><option key={l}>{l}</option>)}</select><button className="swap" onClick={()=>{setStart(end);setEnd(start);setSelected(null)}} aria-label="Swap starting point and destination">⇅</button><label htmlFor="end">Destination</label><select id="end" value={end} onChange={e=>{setEnd(e.target.value);setSelected(null)}}>{locations.map(l=><option key={l}>{l}</option>)}</select>{same && <p className="error" role="alert">Choose two different locations to compare routes.</p>}<p className="field-note">Choose “Pick on map” to use your own locations.</p></>}<div className="divider"/><div className="section-title"><h3>Compare by</h3><span>↗</span></div><label htmlFor="ranking">Ranking criterion</label><select id="ranking" value={ranking} onChange={e=>{setRanking(e.target.value);setSelected(null)}}><option value="energy">Modeled energy per meter</option><option value="distance">Distance baseline</option><option value="ascent">Total ascent</option><option value="average">Mean absolute grade</option><option value="maximum">Maximum absolute grade</option><option value="experimental">Experimental distance + penalties</option></select><p className="small">Lowest value ranks first. A ranking is not a validated comfort recommendation.</p>{ranking === 'experimental' && <><label className="slider-label" htmlFor="uphill">Uphill penalty <strong>{uphill} m/m</strong></label><input id="uphill" type="range" min="0" max="30" value={uphill} onChange={e=>{setUphill(Number(e.target.value));setSelected(null)}}/><label className="slider-label" htmlFor="downhill">Downhill penalty <strong>{downhill} m/m</strong></label><input id="downhill" type="range" min="0" max="15" value={downhill} onChange={e=>{setDownhill(Number(e.target.value));setSelected(null)}}/></>}<div className="model-note">ⓘ Synthetic samples. The study’s final search cost is still to be determined.</div></aside><div className="map-panel"><div className="map-heading"><span>THE CITY, AT YOUR PACE</span><span>SF / {custom ? 'Custom endpoints' : same?'Choose endpoints':'3 sample candidates'}</span></div><RouteMap routes={routes} selected={active.id} custom={custom || same} start={custom ? customStart : sampleStart} end={custom ? customEnd : sampleEnd} onPick={pick}/></div></section>
+    {custom && <section className="custom-notice" aria-live="polite"><h2>{customStart && customEnd ? 'Your endpoints are selected.' : 'Choose your starting point and destination.'}</h2><p>{customStart && customEnd ? 'Both pins are saved for this session. Walking routes and hill metrics for these locations require a routing and elevation service, which is not connected yet.' : 'Use the A and B buttons, then click the street map. You can also enter coordinates.'}</p></section>}
+    {!same && !custom && <section className="results" aria-live="polite"><div className="results-heading"><div><div className="eyebrow">02 / COMPARE</div><h2>Three paths. Different tradeoffs.</h2></div><p>Ranked by the selected criterion among synthetic candidates.</p></div><div className="route-cards">{ranked.map(route=>{const m=metrics(route);return <button key={route.id} onClick={()=>setSelected(route.id)} className={`route-card ${active.id===route.id?'selected':''}`} aria-pressed={active.id===route.id}><div className="card-top"><span className="route-label"><i style={{background:route.color}}/>{route.name}</span><span className={`badge ${route.id===recommended.id?'green':''}`}>{route.id===recommended.id?'Lowest value':route.id===baseline.id?'Shortest':'Alternative'}</span></div><div className="card-distance">{(route.distance/1000).toFixed(2)} <span>km</span></div><div className="card-metrics"><span>↗ {m.gain} m ascent</span><span>↘ {m.loss} m descent</span></div><div className="card-metrics hill-grades"><span>Mean {m.averageGrade.toFixed(2)}%</span><span>Max {m.maxGrade.toFixed(2)}%</span></div><div className="card-footer">Modeled energy / meter <strong>{m.normalizedCost.toFixed(3)} J/kg/m</strong></div><div className="energy-total">Total modeled energy: {m.totalEnergy.toFixed(0)} J/kg</div>{m.outsideRange && <p className="error">Outside model range (±45%): energy extrapolated.</p>}</button>})}</div><div className="detail-grid"><div className="profile"><div className="section-title"><h3>Elevation profile <span> / {active.name}</span></h3><span>SYNTHETIC / ELEVATION (m)</span></div><svg viewBox="0 0 600 130" role="img" aria-label={`Synthetic elevation profile for ${active.name}`}><path d="M20 20H580M20 60H580M20 100H580" stroke="#e5e8e1" fill="none"/><polygon points={`20,115 ${active.points.map((p,i)=>`${20+samplePositions(active)[i]*560},${115-p.elevation*1.3}`).join(' ')} 580,115`} fill={`${active.color}20`}/><polyline points={active.points.map((p,i)=>`${20+samplePositions(active)[i]*560},${115-p.elevation*1.3}`).join(' ')} stroke={active.color} strokeWidth="3" fill="none"/></svg><div className="range-labels"><span>{start}</span><span>{end}</span></div></div><div className="insight"><div className="eyebrow">THE TRADEOFF</div><h3>{Math.max(0,metrics(baseline).gain-stats.gain)} m less climbing.</h3><p>{active.distance===baseline.distance?'You’re viewing the shortest sample route.':`${active.distance-baseline.distance} extra meters compared with the shortest sample route.`} Sample maximum absolute grade: {stats.maxGrade.toFixed(1)}%.</p><button onClick={()=>setView('method')}>Understand the model ↗</button></div></div><section className="correlation"><div className="section-title"><h3>Ranking agreement with modeled energy per meter</h3><span>SPEARMAN ρ / N = {routes.length}</span></div><div className="correlation-grid">{correlations.map(([label,value])=><div key={label}><span>{label}</span><strong>{value === null ? 'Undefined (ties)' : value.toFixed(3)}</strong></div>)}</div><p>Illustrative calculations on three synthetic routes, with average ranks for ties. These are not study results or evidence that one hill metric is best. All measures share the same elevation inputs.</p></section></section>}
+    </>}
+    <footer><span>comfortwalk <span className="footer-muted">/ Walking route research</span></span><span>Illustrative routes · No validated findings · Not for navigation</span></footer>
+  </main>;
 }
