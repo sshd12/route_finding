@@ -1,6 +1,16 @@
 /** Synthetic candidate routes: illustrative only, not surveyed walkable paths. */
-export type Point = { lat: number; lng: number; elevation: number };
-export type Route = { id: string; name: string; distance: number; segmentDistances: number[]; points: Point[]; color: string };
+export type Coordinate = { lat: number; lng: number };
+export type Point = Coordinate & { elevation: number };
+export type Provenance = {
+  kind: 'synthetic' | 'dem-estimate'; network: string; elevation: string;
+  retrievedAt: string; spacing: number; smoothing: 'none'; distanceMethod: string;
+  specialSections: string[]; parameters?: Record<string, number | string>;
+};
+export type Route = {
+  id: string; name: string; distance: number; segmentDistances: number[];
+  points: Point[]; color: string; geometry?: Coordinate[]; provenance?: Provenance;
+  role?: 'baseline' | 'research' | 'candidate'; providerDistance?: number;
+};
 const point = (lat: number, lng: number, elevation: number): Point => ({ lat, lng, elevation });
 export const locations = ['Ferry Building', 'Washington Square'] as const;
 export const routes: Route[] = [
@@ -22,7 +32,7 @@ export function metrics(route: Route) {
     throw new Error('A route requires finite elevation samples and one positive distance per segment.');
   }
   const distance = route.segmentDistances.reduce((a, b) => a + b, 0);
-  if (!Number.isFinite(route.distance) || Math.abs(distance - route.distance) > 1e-6) {
+  if (!Number.isFinite(distance) || !Number.isFinite(route.distance) || Math.abs(distance - route.distance) > 1e-6) {
     throw new Error('Route distance must equal the sum of segment distances.');
   }
   let gain = 0, loss = 0, maxGrade = 0, totalEnergy = 0, outsideRange = false;
@@ -66,8 +76,17 @@ export function samplePositions(route: Route) {
 }
 /** Provisional equivalent-distance score. Coefficients are meters per elevation meter. */
 export function score(route: Route, uphill: number, downhill: number) {
+  if (![uphill, downhill].every(v => Number.isFinite(v) && v >= 0)) throw new Error('Penalties must be finite and nonnegative.');
   const { gain, loss } = metrics(route);
   return route.distance + uphill * gain + downhill * loss;
+}
+export type Ranking = 'experimental' | 'distance' | 'ascent' | 'average' | 'maximum' | 'energy' | 'totalEnergy';
+export function rankValue(route: Route, criterion: Ranking, uphill: number, downhill: number) {
+  const m = metrics(route);
+  if ((criterion === 'energy' || criterion === 'totalEnergy') && (m.outsideRange || route.provenance?.specialSections.length)) return Infinity;
+  return criterion === 'distance' ? route.distance : criterion === 'ascent' ? m.gain
+    : criterion === 'average' ? m.averageGrade : criterion === 'maximum' ? m.maxGrade
+    : criterion === 'energy' ? m.normalizedCost : criterion === 'totalEnergy' ? m.totalEnergy : score(route, uphill, downhill);
 }
 export function candidates(reverse: boolean) {
   return routes.map(route => reverse ? { ...route, points: [...route.points].reverse(), segmentDistances: [...route.segmentDistances].reverse() } : route);

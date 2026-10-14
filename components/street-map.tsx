@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import type { Map as LeafletMap, LayerGroup } from 'leaflet';
-import type { Route } from '@/lib/routing';
-export type Coordinate = { lat: number; lng: number };
+import type { Coordinate, Route } from '@/lib/routing';
+export type { Coordinate } from '@/lib/routing';
 export default function StreetMap({ start, end, onPick, routes, selected }: {
   start: Coordinate | null; end: Coordinate | null; onPick: (point: Coordinate) => void;
   routes: Route[]; selected: string;
@@ -11,6 +11,7 @@ export default function StreetMap({ start, end, onPick, routes, selected }: {
   const map = useRef<LeafletMap | null>(null);
   const layers = useRef<LayerGroup | null>(null);
   const handler = useRef(onPick);
+  const viewportKey = useRef('');
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(false);
   useEffect(() => { handler.current = onPick; }, [onPick]);
@@ -40,11 +41,13 @@ export default function StreetMap({ start, end, onPick, routes, selected }: {
       if (cancelled || !layers.current) return;
       layers.current.clearLayers();
       [...routes].sort((a,b) => Number(a.id === selected)-Number(b.id === selected)).forEach(route => {
-        L.polyline(route.points.map(p => [p.lat,p.lng]), { color: route.color, weight: route.id === selected ? 6 : 3, opacity: route.id === selected ? 1 : .4, interactive: false }).addTo(layers.current!);
+        L.polyline((route.geometry ?? route.points).map(p => [p.lat,p.lng]), { color: route.color, weight: route.id === selected ? 6 : 3, opacity: route.id === selected ? 1 : .4, interactive: false }).addTo(layers.current!);
       });
-      const endpoints = [start,end].filter((p): p is Coordinate => p !== null);
-      if (map.current && endpoints.some(p => !map.current!.getBounds().contains([p.lat,p.lng]))) {
-        map.current.fitBounds(L.latLngBounds(endpoints.map(p => [p.lat,p.lng])), {padding:[45,45], maxZoom:15});
+      const endpoints = [...[start,end].filter((p): p is Coordinate => p !== null), ...routes.flatMap(r => r.geometry ?? r.points)];
+      const signature = endpoints.map(p => `${p.lat},${p.lng}`).join(';');
+      if (signature !== viewportKey.current && map.current && endpoints.length) {
+        viewportKey.current = signature;
+        if (endpoints.some(p => !map.current!.getBounds().contains([p.lat,p.lng]))) map.current.fitBounds(L.latLngBounds(endpoints.map(p => [p.lat,p.lng])), {padding:[45,45], maxZoom:15});
       }
       [start,end].forEach((point,i) => {
         if (!point) return;

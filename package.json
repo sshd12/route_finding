@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node tests/routing.cjs && node tests/integration.cjs",
+    "typecheck": "tsc --noEmit",
+    "study": "node --env-file-if-exists=.env.local scripts/study.cjs"
   },
   "dependencies": {
     "leaflet": "1.9.4",

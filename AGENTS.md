@@ -13,7 +13,6 @@ The exact metrics, formula, and weights are research decisions still to be devel
 
 ## Web Demonstration
 
-- Use the Google Maps API for the map and route visualization.
 - Let users select a starting point and destination.
 - Display the route recommended by the research algorithm, along with its distance and relevant hill metrics.
 - Keep the cost function and routing logic separate from the map interface so the research model can evolve independently.
@@ -30,4 +29,4 @@ The exact metrics, formula, and weights are research decisions still to be devel
 
 Use `docs/research-reference.tex` as the manuscript reference. Compare total ascent, distance-weighted mean absolute grade, and maximum absolute grade with distance-normalized modeled walking energy. Use signed decimal grades in the supplied Minetti polynomial, explicit segment distances, and average ranks for tied Spearman correlations. Flag slopes outside the stated ±45% model range.
 
-The planned data workflow uses randomly sampled San Francisco endpoints, OpenStreetMap and Valhalla candidate routes, and consistently sampled elevation data. These are planned integrations, not existing capabilities. The final A*/Dijkstra cost function follows metric analysis and is not yet determined; maximum grade is non-additive. Synthetic candidate correlations must never be presented as study findings or independent empirical validation.
+The planned data workflow uses randomly sampled San Francisco endpoints, OpenStreetMap and Valhalla candidate routes, and consistently sampled elevation data. These are planned integrations, not existing capabilities. The final A\*/Dijkstra cost function follows metric analysis and is not yet determined; maximum grade is non-additive. Synthetic candidate correlations must never be presented as study findings or independent empirical validation.
